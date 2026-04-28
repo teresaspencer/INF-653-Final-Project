@@ -1,0 +1,1 @@
+// Mongoose scheme with stateCode (string, required, unique) and funfacts (array of strings)

@@ -1,0 +1,1 @@
+// maps all /states/ endpoints to their controller functions and applies verifyStates middleware when needed
