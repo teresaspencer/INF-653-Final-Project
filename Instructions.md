@@ -1,4 +1,540 @@
+
 # Instructions
+
+# Summary/Steps
+Yep — this one wants a Node + Express + MongoDB + Mongoose API, with most state data coming from statesData.json and only the funfacts living in MongoDB. It also wants the /states/ route family, verifyStates middleware, query-param handling for contig, and POST/PATCH/DELETE support for state fun facts. The assignment PDF and notes also explicitly call for a GitHub repo, deployment, a catch-all 404, and automated testing.
+
+
+## Best setup path now
+### Use:
+VS Code
+Node.js
+Git
+GitHub
+MongoDB Atlas for the database
+Render for hosting
+
+## What you are building
+A REST API with:
+
+`GET /states/`
+
+`GET /states/?contig=true`
+
+`GET /states/?contig=false`
+
+`GET /states/:state`
+
+`GET /states/:state/funfact`
+
+`GET /states/:state/capital`
+
+`GET /states/:state/nickname`
+
+`GET /states/:state/population`
+
+`GET /states/:state/admission`
+
+`POST /states/:state/funfact`
+
+`PATCH /states/:state/funfact`
+
+`DELETE /states/:state/funfact`
+
+## Recommended build order
+The assignment wants statesData.json used directly for the main state data, while MongoDB stores only documents like { stateCode, funfacts }.
+
+Do it in this order:
+
+* Install Node
+* Create project folder
+* Initialize npm
+* Install Express, Mongoose, dotenv, cors
+* Add the supplied statesData.json
+* Build the Mongoose model
+* Build middleware
+* Build the easiest GET routes first
+* Build /states/:state/funfact
+* Build POST/PATCH/DELETE
+* Add root HTML and catch-all 404
+* Test in Postman
+* Push to GitHub
+* Create MongoDB Atlas database
+* Deploy to Render
+* Add DATABASE_URI in Render env vars
+* Re-test public URL
+
+1) Install prerequisites
+Install:
+
+Node.js LTS
+Git if needed
+optionally Postman
+
+Check:
+node -v
+npm -v
+git --version
+
+2) Create the project
+mkdir states-api
+cd states-api
+npm init -y
+npm install express mongoose dotenv cors
+npm install --save-dev nodemon
+
+3) Create this folder structure
+```
+states-api/
+  .env
+  .gitignore
+  package.json
+  server.js
+  data/
+    statesData.json
+  model/
+    States.js
+  middleware/
+    verifyStates.js
+  controllers/
+    statesController.js
+  routes/
+    api/
+      states.js
+  views/
+    index.html
+    404.html
+```
+
+4) Update package.json
+Use this:
+``` 
+{
+
+  "name": "states-api",
+  "version": "1.0.0",
+  "description": "INF653 States API",
+  "main": "server.js",
+  "scripts": {
+    "dev": "nodemon server.js",
+    "start": "node server.js"
+  },
+
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mongoose": "^8.13.2"
+  },
+
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
+```
+
+5) Create .gitignore
+node_modules
+.env
+The instructor notes explicitly say not to commit .env.
+
+6) Create .env
+The notes specify dotenv, require('dotenv').config(), and DATABASE_URI=....
+
+PORT=3500
+
+DATABASE_URI=your_mongodb_atlas_connection_string_here
+
+7) Add statesData.json
+Put the provided Blackboard file into:
+
+data/statesData.json
+
+Do not put all state data into MongoDB; only funfacts go there.
+
+8) Create the Mongoose model: model/States.js
+The schema must have:
+
+stateCode: string, required, unique
+funfacts: array of strings
+
+That is directly in the assignment.
+```
+const mongoose = require('mongoose')
+const Schema = mongoose.Schema
+const statesSchema = new Schema({
+  stateCode: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  funfacts: {
+    type: [String],
+    default: []
+  }
+})
+
+module.exports = mongoose.model('State', statesSchema)
+```
+
+9) Create middleware/verifyStates.js
+The notes strongly suggest middleware that:
+
+accepts lower/mixed case input
+uppercases it
+validates against state codes from statesData.json
+attaches verified code to req
+returns the appropriate invalid-state response otherwise
+```
+const statesData = require('../data/statesData.json')
+const stateCodes = statesData.map(state => state.code)
+const verifyStates = (req, res, next) => {
+  const stateParam = req.params.state?.toUpperCase()
+  if (!stateCodes.includes(stateParam)) {
+    return res.status(400).json({ message: 'Invalid state abbreviation parameter' })
+  }
+  req.code = stateParam
+  next()
+}
+
+module.exports = verifyStates
+```
+
+10) Create the controller: controllers/statesController.js
+This is the core file.
+```
+const State = require('../model/States')
+const statesData = require('../data/statesData.json')
+const mergeFunFacts = async (stateObj) => {
+  const stateFunFacts = await State.findOne({ stateCode: stateObj.code }).lean()
+  if (stateFunFacts?.funfacts?.length) {
+    return { ...stateObj, funfacts: stateFunFacts.funfacts }
+  }
+  return stateObj
+}
+
+const getAllStates = async (req, res) => {
+  let filteredStates = [...statesData]
+  if (req.query.contig === 'true') {
+    filteredStates = filteredStates.filter(state => !['AK', 'HI'].includes(state.code))
+  } else if (req.query.contig === 'false') {
+    filteredStates = filteredStates.filter(state => ['AK', 'HI'].includes(state.code))
+  }
+  const merged = await Promise.all(filteredStates.map(mergeFunFacts))
+  res.json(merged)
+}
+
+const getState = async (req, res) => {
+  const state = statesData.find(s => s.code === req.code)
+  const merged = await mergeFunFacts(state)
+  res.json(merged)
+}
+
+const getFunFact = async (req, res) => {
+  const state = await State.findOne({ stateCode: req.code }).lean()
+  if (!state?.funfacts?.length) {
+    const stateName = statesData.find(s => s.code === req.code).state
+    return res.status(404).json({ message: `No Fun Facts found for ${stateName}` })
+  }
+  const randomIndex = Math.floor(Math.random() * state.funfacts.length)
+  res.json({ funfact: state.funfacts[randomIndex] })
+}
+
+const getCapital = (req, res) => {
+  const state = statesData.find(s => s.code === req.code)
+  res.json({ state: state.state, capital: state.capital_city })
+}
+const getNickname = (req, res) => {
+  const state = statesData.find(s => s.code === req.code)
+  res.json({ state: state.state, nickname: state.nickname })
+}
+
+const getPopulation = (req, res) => {
+  const state = statesData.find(s => s.code === req.code)
+  res.json({ state: state.state, population: state.population.toLocaleString() })
+}
+
+const getAdmission = (req, res) => {
+  const state = statesData.find(s => s.code === req.code)
+  res.json({ state: state.state, admitted: state.admission_date })
+}
+
+const createFunFacts = async (req, res) => {
+  const { funfacts } = req.body
+  if (!funfacts) {
+    return res.status(400).json({ message: 'State fun facts value required' })
+  }
+  if (!Array.isArray(funfacts)) {
+    return res.status(400).json({ message: 'State fun facts value must be an array' })
+  }
+  let stateDoc = await State.findOne({ stateCode: req.code })
+  if (!stateDoc) {
+    stateDoc = await State.create({
+      stateCode: req.code,
+      funfacts
+    })
+  } else {
+    stateDoc.funfacts = [...stateDoc.funfacts, ...funfacts]
+    await stateDoc.save()
+  }
+  res.json(stateDoc)
+}
+
+const updateFunFact = async (req, res) => {
+  const { index, funfact } = req.body
+  if (!index) {
+    return res.status(400).json({ message: 'State fun fact index value required' })
+  }
+  if (!funfact) {
+    return res.status(400).json({ message: 'State fun fact value required' })
+  }
+  const stateDoc = await State.findOne({ stateCode: req.code })
+  if (!stateDoc?.funfacts?.length) {
+    const stateName = statesData.find(s => s.code === req.code).state
+    return res.status(404).json({ message: `No Fun Facts found for ${stateName}` })
+  }
+
+  const arrayIndex = Number(index) - 1
+  if (arrayIndex < 0 || arrayIndex >= stateDoc.funfacts.length) {
+    return res.status(400).json({ message: `No Fun Fact found at that index for ${statesData.find(s => s.code === req.code).state}` })
+  }
+  stateDoc.funfacts[arrayIndex] = funfact
+  await stateDoc.save()
+  res.json(stateDoc)
+}
+
+const deleteFunFact = async (req, res) => {
+  const { index } = req.body
+  if (!index) {
+    return res.status(400).json({ message: 'State fun fact index value required' })
+  }
+  const stateDoc = await State.findOne({ stateCode: req.code })
+  if (!stateDoc?.funfacts?.length) {
+    const stateName = statesData.find(s => s.code === req.code).state
+    return res.status(404).json({ message: `No Fun Facts found for ${stateName}` })
+  }
+
+  const arrayIndex = Number(index) - 1
+  if (arrayIndex < 0 || arrayIndex >= stateDoc.funfacts.length) {
+    return res.status(400).json({ message: `No Fun Fact found at that index for ${statesData.find(s => s.code === req.code).state}` })
+  }
+
+  stateDoc.funfacts = stateDoc.funfacts.filter((_, i) => i !== arrayIndex
+  await stateDoc.save()
+  res.json(stateDoc)
+}
+
+module.exports = {
+  getAllStates,
+  getState,
+  getFunFact,
+  getCapital,
+  getNickname,
+  getPopulation,
+  getAdmission,
+  createFunFacts,
+  updateFunFact,
+  deleteFunFact
+}
+```
+That matches the assignment’s route behaviors, query/body parameter distinctions, and the 1-based indexing requirement for PATCH/DELETE.
+
+11) Create routes: routes/api/states.js
+```
+const express = require('express')
+const router = express.Router()
+const statesController = require('../../controllers/statesController')
+const verifyStates = require('../../middleware/verifyStates')
+router.route('/')
+  .get(statesController.getAllStates)
+router.route('/:state')
+  .get(verifyStates, statesController.getState)
+router.route('/:state/funfact')
+  .get(verifyStates, statesController.getFunFact)
+  .post(verifyStates, statesController.createFunFacts)
+  .patch(verifyStates, statesController.updateFunFact)
+  .delete(verifyStates, statesController.deleteFunFact)
+router.route('/:state/capital')
+  .get(verifyStates, statesController.getCapital)
+router.route('/:state/nickname')
+  .get(verifyStates, statesController.getNickname)
+router.route('/:state/population')
+  .get(verifyStates, statesController.getPopulation)
+router.route('/:state/admission')
+  .get(verifyStates, statesController.getAdmission)
+module.exports = router
+```
+
+12) Create root page: views/index.html
+The assignment wants a public HTML page at the root URL.
+```
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>US States API</title>
+</head>
+<body>
+  <h1>US States API</h1>
+  <p>Welcome to the INF653 States API project.</p>
+  <p>Use <code>/states</code> to access the API.</p>
+</body>
+</html>
+```
+
+13) Create 404 page: views/404.html
+```
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>404 Not Found</title>
+</head>
+<body>
+  <h1>404 Not Found</h1>
+</body>
+</html>
+```
+
+14) Create server.js
+```
+require('dotenv').config()
+const express = require('express')
+const path = require('path')
+const mongoose = require('mongoose')
+const cors = require('cors')
+const app = express()
+const PORT = process.env.PORT || 3500
+app.use(cors())
+app.use(express.urlencoded({ extended: false }))
+app.use(express.json())
+app.use('/', express.static(path.join(__dirname, '/views')))
+app.use('/states', require('./routes/api/states'))
+app.all('*', (req, res) => {
+  res.status(404)
+  if (req.accepts('html')) {
+    res.sendFile(path.join(__dirname, 'views', '404.html'))
+  } else if (req.accepts('json')) {
+    res.json({ error: '404 Not Found' })
+  } else {
+    res.type('txt').send('404 Not Found')
+  }
+})
+
+mongoose.connect(process.env.DATABASE_URI)
+mongoose.connection.once('open', () => {
+  console.log('Connected to MongoDB')
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`))
+})
+```
+
+This matches the dotenv usage the notes mention and the catch-all behavior the PDF requires.
+
+15) Seed your required fun facts
+You need at least 3 fun facts each for:
+
+Kansas
+Missouri
+Oklahoma
+Nebraska
+Colorado
+
+And do not add them yet for:
+
+New Hampshire
+Rhode Island
+Georgia
+Arizona
+Montana
+
+You can seed them manually with Postman using POST /states/KS/funfact, etc.
+
+Example body:
+```
+{
+  "funfacts": [
+    "Kansas contains the geographic center of the contiguous United States.",
+    "The state song is 'Home on the Range.'",
+    "Wichita is known as the Air Capital of the World."
+  ]
+}
+```
+
+16) Run locally
+npm run dev
+
+Test:
+
+http://localhost:3500/
+http://localhost:3500/states
+http://localhost:3500/states?contig=true
+http://localhost:3500/states/KS
+http://localhost:3500/states/KS/funfact
+http://localhost:3500/states/KS/capital
+
+17) Create MongoDB Atlas database
+MongoDB Atlas still offers a free cluster and documents it as free forever for learning/exploration. (MongoDB)
+
+Do this:
+
+Create Atlas account
+Create free cluster
+Create database user
+Add your IP address
+Get connection string
+Put it in .env as DATABASE_URI
+
+The instructor’s markdown gives the same general DATABASE_URI pattern.
+
+18) Push to GitHub
+```
+git init
+git add .
+git commit -m "Initial states API"
+git branch -M main
+git remote add origin https://github.com/YOUR_USERNAME/states-api.git
+git push -u origin main
+```
+
+19) Deploy to Render
+
+In Render:
+New Web Service
+Connect GitHub repo
+Build command: npm install
+Start command: npm start
+Add env var:
+DATABASE_URI=...
+optionally PORT=10000 is not needed; Render sets port automatically
+Deploy
+
+20) What to prioritize for automated tests
+The notes already hint at the best order:
+
+First get /states/ returning raw JSON from statesData.json
+
+Then do the simple endpoints:
+
+/capital
+/nickname
+/population
+/admission
+
+Then do verifyStates
+
+Then do /states/:state
+
+Then /states/:state/funfact
+
+Then POST/PATCH/DELETE
+
+Then finish merged funfacts on /states/
+
+That is the fastest “pass tests early” order from the instructor notes.
+
+Next move should be: create the folder structure, paste the files above, and get /states working locally before touching MongoDB.
+
+
 
 ## dotenv Environment Variable - Step-by-Step
 
