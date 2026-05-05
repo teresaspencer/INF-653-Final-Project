@@ -25,5 +25,11 @@ const getAllStates = async (req, res) => {
 }
 
 const getState = async (req, res) => {
+    const state = statesData.find(s => s.code === req.code)
+    const merged = await mergeFunFacts(state)
+    res.json(merged)
+}
+
+const getFunFact = async (req, res) => {
     
 }
