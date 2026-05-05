@@ -6,7 +6,7 @@ const Schema = mongoose.Schema
 const statesSchema = new Schema({
     stateCode: {
         type: String,
-        requires: true,
+        required: true,
         unique: true
     },
     funfacts: {
