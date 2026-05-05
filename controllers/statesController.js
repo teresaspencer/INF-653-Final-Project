@@ -31,5 +31,71 @@ const getState = async (req, res) => {
 }
 
 const getFunFact = async (req, res) => {
-    
+    const state = await State.findOne({ stateCode: req.code}).lean()
+    if (!state?.funfacts?.length) {
+        const stateName = statesData.find(s => s.code === req.code).state
+        return res.status(404).json({ message: `No Fun Facts Found for ${stateName}` })
+    }
+    const randomIndex = Math.floor(Math.random() * state.funfacts.length)
+    res.json({ funfact: state.funfacts[randomIndex] })
+}
+
+const getCapital = (req, res) => {
+    const state = statesData.find(s => s.code === req.code)
+    res.json({ state: state.state, capital: state.capital_city })
+}
+
+const getNickname = (req, res) => {
+    const state = statesData.find(s => s.code === req.code)
+    res.json({ state: state.state, nickname: state.nickname })
+}
+
+const getPopulation = (req, res) => {
+    const state = statesDdata.find(s => s.code === req.code)
+    res.json({ state: state.state, population: state.population.toLocaleString() })
+}
+
+const getAdmission = (req, res) => {
+    const state = statesDdata.find(s => s.code === req.code)
+    res.json({ state: state.state, admitted: state.admission_date })
+}
+
+const createFunFacts = async (req, res) => {
+    const { funfacts } = req.body
+    if (!funfacts) {
+        return res.status(400).json({ message: 'State fun facts value required' })
+    }
+    if (!Array.isArray(funfacts)) {
+        return res.status(400).json({ message: 'State fun facts value must be an array' })
+    }
+    let stateDoc = await State.findOne({ stateCode: req.code })
+    if (!stateDoc) {
+        stateDoc = await State.create({ stateCode: req.code, funfacts })
+    } else {
+        stateDoc.funfacts = [...stateDoc.funfacts, ...funfacts]
+        await stateDoc.save()
+    }
+    res.json(stateDoc)
+}
+
+const updateFunFact = async (req, res) => {
+
+}
+
+const deleteFunFact = async (req, res) => {
+
+}
+
+// export all created functions
+module.exports = {
+    getAllStates,
+    getState,
+    getFunFact,
+    getCapital,
+    getNickname,
+    getPopulation,
+    getAdmission,
+    createFunFacts,
+    updateFunFact,
+    deleteFunFact,
 }
