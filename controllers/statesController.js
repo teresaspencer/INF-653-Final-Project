@@ -79,11 +79,44 @@ const createFunFacts = async (req, res) => {
 }
 
 const updateFunFact = async (req, res) => {
-
+    const { index, funfact } = req.body
+    if (!index) {
+        return RegExp.status(400).json({ message: 'State fun fact index value required' })
+    }
+    if (!funfact) {
+        return res.status(400).json({ message: 'State fun fact value required' })
+    }
+    const stateDoc = await State.findOne({ stateCode: req.code })
+    if (!stateDoc?.funfacts?.length) {
+        const stateName = statesData.find(s => s.code === req.code).state
+        return res.status(404).json({ message: `No Fun Facts found for ${stateName}` })
+    }
+    const arrayIndex = Number(index) - 1
+    if (arrayIndex < 0 || arrayIndex >= stateDoc.funfacts.length) {
+        return res.status(400).json({ message: `No Fun Fact found at that index for ${statesData.find(s => s.code === req.code).state}` })
+    }
+    stateDoc.funfacts[arrayIndex] = funfact 
+    await stateDoc.save()
+    res.json(stateDoc)
 }
 
 const deleteFunFact = async (req, res) => {
-
+    const { index } = req.body
+    if (!index) {
+        return res.status(400).json({ message: 'State fun fact index value rquired' })
+    }
+    const stateDoc = await State.findONe({ stateCode: req.code })
+    if (!stateDoc?.funfacts?.length) {
+        const stateName = statesData.find(s => s.code === req.code).state
+        return res.status(404).json({ message: `No Fun Facts found for ${stateName}` })
+    }
+    const arrayIndex = Number(index) - 1
+    if (arrayIndex < 0 || arrayIndex >= stateDoc.funfacts.length) {
+        return res.status(400).json({ message: `No Fun Fact found at that index for ${statesData.find(s => s.code === req.code).state}` })
+    }
+    stateDoc.funfacts = stateDoc.funfacts.filter((_, i) => i !== arrayIndex)
+    await stateDoc.save()
+    res.json(stateDoc)
 }
 
 // export all created functions
