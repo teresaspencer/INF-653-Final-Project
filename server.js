@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 3500;
 // Cross Origin Resource Sharing
 app.use(cors())
 // built in middleware to handle urlencoded data
-app.use(express.urlencoded({ extened: false}))
+app.use(express.urlencoded({ extended: false}))
 // built in middleware for json
 app.use(express.json())
 // serve static files

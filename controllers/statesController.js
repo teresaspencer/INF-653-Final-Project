@@ -2,12 +2,12 @@
 // (GET all states, GET by state, GET funfact, 
 // GET capital/nickname/population/admission)
 
-const State = require('../model.States')
-const statesDate = require('../data/statesData.json')
+const State = require('../model/States')
+const statesData = require('../data/statesData.json')
 
 // helper function for other get functions
 const mergeFunFacts = async (stateObj) => {
-    stateFunFacts = await State.findOne({ stateCode: stateObj.code }).lean()
+    const stateFunFacts = await State.findOne({ stateCode: stateObj.code }).lean()
     if (stateFunFacts?.funfacts?.length) {
         return { ...stateObj, funfacts: stateFunFacts.funfacts }
     }
@@ -51,12 +51,12 @@ const getNickname = (req, res) => {
 }
 
 const getPopulation = (req, res) => {
-    const state = statesDdata.find(s => s.code === req.code)
+    const state = statesData.find(s => s.code === req.code)
     res.json({ state: state.state, population: state.population.toLocaleString() })
 }
 
 const getAdmission = (req, res) => {
-    const state = statesDdata.find(s => s.code === req.code)
+    const state = statesData.find(s => s.code === req.code)
     res.json({ state: state.state, admitted: state.admission_date })
 }
 
@@ -81,7 +81,7 @@ const createFunFacts = async (req, res) => {
 const updateFunFact = async (req, res) => {
     const { index, funfact } = req.body
     if (!index) {
-        return RegExp.status(400).json({ message: 'State fun fact index value required' })
+        return res.status(400).json({ message: 'State fun fact index value required' })
     }
     if (!funfact) {
         return res.status(400).json({ message: 'State fun fact value required' })
@@ -105,7 +105,7 @@ const deleteFunFact = async (req, res) => {
     if (!index) {
         return res.status(400).json({ message: 'State fun fact index value rquired' })
     }
-    const stateDoc = await State.findONe({ stateCode: req.code })
+    const stateDoc = await State.findOne({ stateCode: req.code })
     if (!stateDoc?.funfacts?.length) {
         const stateName = statesData.find(s => s.code === req.code).state
         return res.status(404).json({ message: `No Fun Facts found for ${stateName}` })
