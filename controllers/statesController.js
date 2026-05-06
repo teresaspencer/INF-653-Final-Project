@@ -34,7 +34,7 @@ const getFunFact = async (req, res) => {
     const state = await State.findOne({ stateCode: req.code}).lean()
     if (!state?.funfacts?.length) {
         const stateName = statesData.find(s => s.code === req.code).state
-        return res.status(404).json({ message: `No Fun Facts Found for ${stateName}` })
+        return res.status(404).json({ message: `No Fun Facts found for ${stateName}` })
     }
     const randomIndex = Math.floor(Math.random() * state.funfacts.length)
     res.json({ funfact: state.funfacts[randomIndex] })
@@ -103,7 +103,7 @@ const updateFunFact = async (req, res) => {
 const deleteFunFact = async (req, res) => {
     const { index } = req.body
     if (!index) {
-        return res.status(400).json({ message: 'State fun fact index value rquired' })
+        return res.status(400).json({ message: 'State fun fact index value required' })
     }
     const stateDoc = await State.findOne({ stateCode: req.code })
     if (!stateDoc?.funfacts?.length) {
